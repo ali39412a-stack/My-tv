@@ -75,13 +75,14 @@ button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));c
   <div class="empty" id="empty" style="display:none">لا توجد قنوات مطابقة</div>
 
   <div class="section">
-    <h2>🔗 روابط سريعة لجلب القوائم</h2>
-    <p>اضغط أي زر ليفتح لك صفحة القائمة بتبويب جديد، ثم حدد الكل (Ctrl/طول الضغط ثم تحديد الكل) وانسخ، وارجع هنا للصقه بمربع الاستيراد تحت.</p>
+    <h2>🔗 استيراد تلقائي بضغطة زر</h2>
+    <p>بما إن الموقع مستضاف حقيقي الآن، اضغط أي زر وبيتم جلب واستيراد القنوات تلقائيًا (بدون نسخ يدوي). إذا ما اشتغل زر معيّن، استخدم الاستيراد اليدوي تحت كبديل.</p>
     <div class="row" id="quickLinks"></div>
+    <div class="status" id="quickStatus"></div>
   </div>
 
   <div class="section">
-    <h2>➕ استيراد قائمة قنوات (M3U)</h2>
+    <h2>➕ استيراد قائمة قنوات (M3U) يدويًا</h2>
     <p>انسخ محتوى أي قائمة M3U مفتوحة (مثلاً من iptv-org.github.io/iptv) والصقه هنا، وستُنظَّم القنوات تلقائيًا حسب الفئة/الدولة.</p>
     <textarea id="m3uInput" rows="4" placeholder="#EXTM3U
 #EXTINF:-1 tvg-id=&quot;ch1&quot; group-title=&quot;News&quot;,Channel Name
@@ -377,19 +378,37 @@ const QUICK_LINKS = [
   {label:"🇦🇪 الإمارات", url:"https://iptv-org.github.io/iptv/countries/ae.m3u"},
   {label:"🇯🇴 الأردن", url:"https://iptv-org.github.io/iptv/countries/jo.m3u"},
   {label:"🇲🇦 المغرب", url:"https://iptv-org.github.io/iptv/countries/ma.m3u"},
-  {label:"📰 إخبارية عالمية", url:"https://iptv-org.github.io/iptv/categories/news.m3u"},
+  {label:"📰 إخبارية", url:"https://iptv-org.github.io/iptv/categories/news.m3u"},
   {label:"⚽ رياضة", url:"https://iptv-org.github.io/iptv/categories/sport.m3u"},
   {label:"🎬 أفلام", url:"https://iptv-org.github.io/iptv/categories/movies.m3u"},
-  {label:"📚 كل الفئات", url:"https://iptv-org.github.io/iptv/index.category.m3u"},
 ];
 function renderQuickLinks(){
   const wrap = document.getElementById('quickLinks');
   QUICK_LINKS.forEach(q=>{
-    const a = document.createElement('a');
-    a.href = q.url; a.target = '_blank'; a.rel='noopener';
-    a.className='ctrlBtn'; a.style.cssText='display:inline-block;background:var(--card2);color:var(--text);border:1px solid var(--border);text-decoration:none;border-radius:10px;padding:8px 12px;font-size:12.5px';
-    a.textContent = q.label;
-    wrap.appendChild(a);
+    const btn = document.createElement('button');
+    btn.className='ctrlBtn'; btn.style.cssText='background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:12.5px';
+    btn.textContent = q.label;
+    btn.onclick = async ()=>{
+      const status = document.getElementById('quickStatus');
+      status.textContent = 'جارٍ الجلب...';
+      try{
+        const res = await fetch(q.url);
+        if(!res.ok) throw new Error('bad status');
+        const text = await res.text();
+        const parsed = parseM3U(text);
+        if(!parsed.length){ status.textContent='لم يتم العثور على قنوات.'; return; }
+        let existingImported = [];
+        try{ existingImported = JSON.parse(localStorage.getItem('iptv_imported')||'[]'); }catch(e){}
+        const merged = existingImported.concat(parsed);
+        saveImported(merged);
+        library = STARTER.concat(merged);
+        status.textContent = `تم جلب واستيراد ${parsed.length} قناة من ${q.label} ✅`;
+        renderTabs(); renderGrid();
+      }catch(e){
+        status.textContent = 'تعذّر الجلب التلقائي (قيود على هذا المصدر) — استخدم الاستيراد اليدوي تحت: افتح الرابط بتبويب جديد، انسخ النص، والصقه بالمربع.';
+      }
+    };
+    wrap.appendChild(btn);
   });
 }
 renderQuickLinks();
