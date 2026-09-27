@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>مشغل القنوات المفتوحة</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
+<style>
+:root{
+  --bg:#0f1115; --card:#1b1f27; --card2:#242a35; --text:#eef1f6; --sub:#9aa4b2;
+  --accent:#20c997; --accent2:#0ea5e9; --danger:#ef4444; --border:#2c3341;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  box-sizing:border-box;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){--bg:#f4f6f9;--card:#fff;--card2:#eef1f6;--text:#161a20;--sub:#5b6472;--border:#dfe4ea;}
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Tahoma,Arial,sans-serif;min-height:100%}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 14px env(safe-area-inset-top,0px);padding-top:calc(14px + env(safe-area-inset-top,0px));border-bottom:1px solid var(--border);box-shadow:0 4px 14px rgba(0,0,0,.15)}
+h1{font-size:19px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.count{font-size:11px;color:var(--sub);background:var(--card2);border-radius:20px;padding:2px 9px;font-weight:400}
+.searchRow{display:flex;gap:8px}
+input[type=text],textarea{background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;font-size:14px;width:100%;font-family:inherit}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin-top:10px;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.tab{flex:0 0 auto;padding:7px 14px;border-radius:20px;background:var(--card2);color:var(--sub);font-size:13px;white-space:nowrap;cursor:pointer;border:1px solid var(--border);transition:.15s}
+.tab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#08211a;border-color:transparent;font-weight:700}
+main{padding:14px;max-width:900px;margin:0 auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px}
+.ch{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;cursor:pointer;position:relative;transition:.12s}
+.ch:active{transform:scale(.96);border-color:var(--accent)}
+.badge{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--card2),var(--border));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:var(--accent2);margin-bottom:8px}
+.chName{font-size:13.5px;font-weight:600;line-height:1.3}
+.chMeta{font-size:11px;color:var(--sub);margin-top:3px}
+.now{font-size:10.5px;color:var(--accent);margin-top:4px;display:flex;align-items:center;gap:4px;font-weight:600}
+.now::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.star{position:absolute;top:8px;left:8px;font-size:16px;background:none;border:none;cursor:pointer;color:var(--sub)}
+.star.on{color:#f5b400}
+.empty{color:var(--sub);text-align:center;padding:30px;font-size:14px}
+.section{margin-top:22px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px}
+.section h2{font-size:15px;margin:0 0 10px}
+.section p{font-size:12.5px;color:var(--sub);margin:0 0 8px;line-height:1.6}
+button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#08211a;border:none;border-radius:10px;padding:10px 16px;font-weight:700;font-size:13.5px;cursor:pointer}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+#player{position:fixed;inset:0;background:#000;display:none;z-index:20;flex-direction:column;animation:fade .15s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+#player.show{display:flex}
+#player video{flex:1;width:100%;background:#000;object-fit:contain}
+.pbar{display:flex;justify-content:space-between;align-items:center;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;color:#fff}
+.pbar b{font-size:14px;display:block}
+.pbar span{font-size:11px;color:#aaa;display:block}
+.closeBtn{background:#242a35;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px}
+.status{color:var(--sub);font-size:12px;text-align:center;padding:6px}
+.ctrls{display:flex;gap:8px;align-items:center;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));flex-wrap:wrap;background:#0c0e12}
+.ctrlBtn{background:#242a35;color:#fff;border:1px solid #333;border-radius:8px;padding:7px 11px;font-size:12px;cursor:pointer}
+.ctrlBtn.active{background:var(--accent);color:#08211a;border-color:var(--accent)}
+.volWrap{display:flex;align-items:center;gap:6px;color:#fff;font-size:12px;flex:1;min-width:120px}
+.volWrap input{flex:1}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📺 مشغل القنوات المفتوحة <span class="count" id="countBadge"></span></h1>
+  <div class="searchRow">
+    <input type="text" id="search" placeholder="ابحث عن قناة...">
+  </div>
+  <div class="tabs" id="tabs"></div>
+</header>
+
+<main>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" style="display:none">لا توجد قنوات مطابقة</div>
+
+  <div class="section">
+    <h2>🔗 روابط سريعة لجلب القوائم</h2>
+    <p>اضغط أي زر ليفتح لك صفحة القائمة بتبويب جديد، ثم حدد الكل (Ctrl/طول الضغط ثم تحديد الكل) وانسخ، وارجع هنا للصقه بمربع الاستيراد تحت.</p>
+    <div class="row" id="quickLinks"></div>
+  </div>
+
+  <div class="section">
+    <h2>➕ استيراد قائمة قنوات (M3U)</h2>
+    <p>انسخ محتوى أي قائمة M3U مفتوحة (مثلاً من iptv-org.github.io/iptv) والصقه هنا، وستُنظَّم القنوات تلقائيًا حسب الفئة/الدولة.</p>
+    <textarea id="m3uInput" rows="4" placeholder="#EXTM3U
+#EXTINF:-1 tvg-id=&quot;ch1&quot; group-title=&quot;News&quot;,Channel Name
+https://example.com/stream.m3u8"></textarea>
+    <div class="row">
+      <button class="primary" id="importBtn">استيراد القائمة</button>
+      <button class="closeBtn" id="clearImport" style="background:var(--card2);color:var(--text)">مسح المستورد</button>
+    </div>
+    <div class="status" id="importStatus"></div>
+  </div>
+
+  <div class="section">
+    <h2>🗓️ جدول البرامج (EPG)</h2>
+    <p>الصق بيانات XMLTV (ملف EPG قياسي) لعرض "البرنامج الحالي" لكل قناة. تتم مطابقة القنوات عبر tvg-id، لذا يعمل بشكل أفضل مع القنوات المستوردة التي تحمل هذا المعرّف.</p>
+    <textarea id="epgInput" rows="3" placeholder="<tv><programme start=&quot;...&quot; stop=&quot;...&quot; channel=&quot;ch1&quot;><title>اسم البرنامج</title></programme></tv>"></textarea>
+    <div class="row">
+      <button class="primary" id="epgBtn">استيراد الجدول</button>
+      <button class="closeBtn" id="clearEpg" style="background:var(--card2);color:var(--text)">مسح الجدول</button>
+    </div>
+    <div class="status" id="epgStatus"></div>
+  </div>
+</main>
+
+<div id="player">
+  <div class="pbar">
+    <div><b id="pName"></b><span id="pMeta"></span><span class="now" id="pNow" style="display:none"></span></div>
+    <button class="closeBtn" id="closePlayer">✕ إغلاق</button>
+  </div>
+  <video id="video" controls autoplay playsinline></video>
+  <div class="status" id="playStatus"></div>
+  <div class="ctrls">
+    <button class="ctrlBtn" id="fitBtn">🔍 ملء الشاشة</button>
+    <button class="ctrlBtn" id="audioBtn" style="display:none">🔊 المسار الصوتي</button>
+    <button class="ctrlBtn" id="subBtn" style="display:none">💬 الترجمة: إيقاف</button>
+    <div class="volWrap">🔈<input type="range" id="volSlider" min="0" max="100" value="100"></div>
+  </div>
+</div>
+
+<script>
+const STARTER = [
+  {name:"Al Jazeera Arabic — الجزيرة", url:"https://live-hls-web-aja.getaj.net/AJA/index.m3u8", group:"إخبارية"},
+  {name:"Al Jazeera English", url:"https://live-hls-web-aje.getaj.net/AJE/index.m3u8", group:"إخبارية"},
+  {name:"France 24 Arabic — فرانس 24", url:"https://static.france24.com/live/F24_AR_LO_HLS/live_web.m3u8", group:"إخبارية"},
+  {name:"France 24 English", url:"https://static.france24.com/live/F24_EN_LO_HLS/live_web.m3u8", group:"إخبارية"},
+  {name:"France 24 Français", url:"https://static.france24.com/live/F24_FR_LO_HLS/live_web.m3u8", group:"إخبارية"},
+  {name:"DW Arabic — دويتشه فيله", url:"https://dwamdstream108.akamaized.net/hls/live/2015529/dwstream108/index.m3u8", group:"إخبارية"},
+  {name:"DW English", url:"https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8", group:"إخبارية"},
+  {name:"NASA TV", url:"https://ntv1.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8", group:"وثائقية"},
+  {name:"Bloomberg TV", url:"https://bloomberg.com/media-manifest/streams/us.m3u8", group:"أعمال"},
+];
+
+let library = [];
+let favorites = {};
+let epgData = {}; // tvgId -> [{start:Date, stop:Date, title}]
+try{ favorites = JSON.parse(localStorage.getItem('iptv_favs')||'{}'); }catch(e){ favorites = {}; }
+try{
+  const savedImport = JSON.parse(localStorage.getItem('iptv_imported')||'[]');
+  library = STARTER.concat(savedImport);
+}catch(e){ library = STARTER.slice(); }
+
+let activeTab = 'الكل';
+let hls = null;
+
+function saveFavs(){ try{ localStorage.setItem('iptv_favs', JSON.stringify(favorites)); }catch(e){} }
+function saveImported(list){ try{ localStorage.setItem('iptv_imported', JSON.stringify(list)); }catch(e){} }
+
+function groups(){
+  const set = new Set(library.map(c=>c.group||'عام'));
+  return ['الكل','⭐ المفضلة', ...Array.from(set).sort()];
+}
+
+function renderTabs(){
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML='';
+  groups().forEach(g=>{
+    const el = document.createElement('div');
+    el.className = 'tab' + (g===activeTab?' active':'');
+    el.textContent = g;
+    el.onclick = ()=>{ activeTab=g; renderTabs(); renderGrid(); };
+    tabs.appendChild(el);
+  });
+  document.getElementById('countBadge').textContent = library.length + ' قناة';
+}
+
+function xmltvToDate(s){
+  // format: YYYYMMDDHHmmss +ZZZZ
+  if(!s) return null;
+  const m = s.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
+  if(!m) return null;
+  return new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]));
+}
+
+function nowProgram(tvgId){
+  if(!tvgId || !epgData[tvgId]) return null;
+  const now = new Date();
+  return epgData[tvgId].find(p=> p.start<=now && now<=p.stop) || null;
+}
+
+function renderGrid(){
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const grid = document.getElementById('grid');
+  grid.innerHTML='';
+  let list = library;
+  if(activeTab==='⭐ المفضلة') list = list.filter(c=>favorites[c.url]);
+  else if(activeTab!=='الكل') list = list.filter(c=>(c.group||'عام')===activeTab);
+  if(q) list = list.filter(c=>c.name.toLowerCase().includes(q));
+
+  document.getElementById('empty').style.display = list.length? 'none':'block';
+
+  list.forEach(c=>{
+    const card = document.createElement('div');
+    card.className='ch';
+    const initial = (c.name||'?').trim().charAt(0).toUpperCase();
+    const prog = nowProgram(c.tvgId);
+    card.innerHTML = `
+      <button class="star ${favorites[c.url]?'on':''}">★</button>
+      <div class="badge">${initial}</div>
+      <div class="chName">${c.name}</div>
+      <div class="chMeta">${c.group||'عام'}</div>
+      ${prog? `<div class="now">${prog.title}</div>` : ''}`;
+    card.querySelector('.star').onclick = (e)=>{
+      e.stopPropagation();
+      favorites[c.url] = !favorites[c.url];
+      saveFavs(); renderGrid();
+    };
+    card.onclick = ()=> playChannel(c);
+    grid.appendChild(card);
+  });
+}
+
+function playChannel(c){
+  const player = document.getElementById('player');
+  const video = document.getElementById('video');
+  document.getElementById('pName').textContent = c.name;
+  document.getElementById('pMeta').textContent = c.group||'';
+  document.getElementById('playStatus').textContent = 'جارٍ التحميل...';
+  video.style.objectFit = 'contain';
+  document.getElementById('fitBtn').textContent = '🔍 ملء الشاشة';
+  document.getElementById('audioBtn').style.display='none';
+  document.getElementById('subBtn').style.display='none';
+  const prog = nowProgram(c.tvgId);
+  const pNow = document.getElementById('pNow');
+  if(prog){ pNow.style.display='flex'; pNow.textContent = 'الآن: ' + prog.title; } else { pNow.style.display='none'; }
+  player.classList.add('show');
+
+  if(hls){ hls.destroy(); hls=null; }
+  if(window.Hls && Hls.isSupported()){
+    hls = new Hls();
+    hls.loadSource(c.url);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, ()=>{
+      document.getElementById('playStatus').textContent='';
+      video.play().catch(()=>{});
+      if(hls.audioTracks && hls.audioTracks.length>1){
+        document.getElementById('audioBtn').style.display='inline-block';
+      }
+      if(hls.subtitleTracks && hls.subtitleTracks.length>0){
+        document.getElementById('subBtn').style.display='inline-block';
+      }
+    });
+    hls.on(Hls.Events.ERROR, (evt,data)=>{
+      if(data.fatal) document.getElementById('playStatus').textContent = 'تعذر تشغيل هذه القناة الآن (قد يكون الرابط غير متاح مؤقتًا).';
+    });
+  } else if(video.canPlayType('application/vnd.apple.mpegurl')){
+    video.src = c.url;
+    video.play().catch(()=>{});
+    document.getElementById('playStatus').textContent='';
+  } else {
+    document.getElementById('playStatus').textContent = 'المتصفح لا يدعم تشغيل هذا النوع من البث.';
+  }
+}
+
+document.getElementById('closePlayer').onclick = ()=>{
+  const player = document.getElementById('player');
+  const video = document.getElementById('video');
+  player.classList.remove('show');
+  video.pause(); video.removeAttribute('src'); video.load();
+  if(hls){ hls.destroy(); hls=null; }
+};
+
+document.getElementById('fitBtn').onclick = ()=>{
+  const video = document.getElementById('video');
+  const isContain = video.style.objectFit !== 'cover';
+  video.style.objectFit = isContain ? 'cover' : 'contain';
+  document.getElementById('fitBtn').textContent = isContain ? '🔍 احتواء' : '🔍 ملء الشاشة';
+};
+
+document.getElementById('audioBtn').onclick = ()=>{
+  if(!hls || !hls.audioTracks || hls.audioTracks.length<2) return;
+  const next = (hls.audioTrack + 1) % hls.audioTracks.length;
+  hls.audioTrack = next;
+  const t = hls.audioTracks[next];
+  document.getElementById('audioBtn').textContent = '🔊 ' + (t.name || t.lang || ('مسار '+(next+1)));
+};
+
+document.getElementById('subBtn').onclick = ()=>{
+  if(!hls || !hls.subtitleTracks) return;
+  const cur = hls.subtitleTrack;
+  const next = cur+1 >= hls.subtitleTracks.length ? -1 : cur+1;
+  hls.subtitleTrack = next;
+  hls.subtitleDisplay = next !== -1;
+  const btn = document.getElementById('subBtn');
+  if(next===-1){ btn.textContent='💬 الترجمة: إيقاف'; btn.classList.remove('active'); }
+  else{ const t = hls.subtitleTracks[next]; btn.textContent = '💬 ' + (t.name||t.lang||('ترجمة '+(next+1))); btn.classList.add('active'); }
+};
+
+document.getElementById('volSlider').oninput = (e)=>{
+  document.getElementById('video').volume = e.target.value/100;
+};
+
+document.getElementById('search').addEventListener('input', renderGrid);
+
+function parseM3U(text){
+  const lines = text.split(/\r?\n/);
+  const out = [];
+  let pending = null;
+  for(const raw of lines){
+    const line = raw.trim();
+    if(line.startsWith('#EXTINF')){
+      const nameMatch = line.match(/,(.*)$/);
+      const groupMatch = line.match(/group-title="([^"]*)"/i);
+      const idMatch = line.match(/tvg-id="([^"]*)"/i);
+      pending = {
+        name: nameMatch ? nameMatch[1].trim() : 'قناة',
+        group: groupMatch ? groupMatch[1].trim() : 'مستورد',
+        tvgId: idMatch ? idMatch[1].trim() : undefined
+      };
+    } else if(line && !line.startsWith('#') && pending){
+      out.push({name: pending.name, group: pending.group, url: line, tvgId: pending.tvgId});
+      pending = null;
+    }
+  }
+  return out;
+}
+
+document.getElementById('importBtn').onclick = ()=>{
+  const text = document.getElementById('m3uInput').value;
+  const status = document.getElementById('importStatus');
+  if(!text.trim()){ status.textContent='الصق محتوى قائمة M3U أولاً.'; return; }
+  const parsed = parseM3U(text);
+  if(!parsed.length){ status.textContent='لم يتم العثور على قنوات صالحة في النص الملصق.'; return; }
+  let existingImported = [];
+  try{ existingImported = JSON.parse(localStorage.getItem('iptv_imported')||'[]'); }catch(e){}
+  const merged = existingImported.concat(parsed);
+  saveImported(merged);
+  library = STARTER.concat(merged);
+  status.textContent = `تم استيراد ${parsed.length} قناة بنجاح ✅`;
+  renderTabs(); renderGrid();
+};
+
+document.getElementById('clearImport').onclick = ()=>{
+  saveImported([]);
+  library = STARTER.slice();
+  document.getElementById('importStatus').textContent='تم مسح القنوات المستوردة.';
+  renderTabs(); renderGrid();
+};
+
+document.getElementById('epgBtn').onclick = ()=>{
+  const text = document.getElementById('epgInput').value;
+  const status = document.getElementById('epgStatus');
+  if(!text.trim()){ status.textContent='الصق بيانات XMLTV أولاً.'; return; }
+  try{
+    const doc = new DOMParser().parseFromString(text, 'text/xml');
+    const progs = doc.getElementsByTagName('programme');
+    let count = 0;
+    for(const p of progs){
+      const ch = p.getAttribute('channel');
+      const start = xmltvToDate(p.getAttribute('start'));
+      const stop = xmltvToDate(p.getAttribute('stop'));
+      const titleEl = p.getElementsByTagName('title')[0];
+      const title = titleEl ? titleEl.textContent : 'برنامج';
+      if(!ch || !start || !stop) continue;
+      if(!epgData[ch]) epgData[ch] = [];
+      epgData[ch].push({start, stop, title});
+      count++;
+    }
+    status.textContent = count ? `تم تحميل ${count} برنامج ✅` : 'لم يتم العثور على بيانات صالحة.';
+    renderGrid();
+  }catch(e){
+    status.textContent = 'تعذّر تحليل بيانات XMLTV.';
+  }
+};
+
+document.getElementById('clearEpg').onclick = ()=>{
+  epgData = {};
+  document.getElementById('epgStatus').textContent='تم مسح جدول البرامج.';
+  renderGrid();
+};
+
+const QUICK_LINKS = [
+  {label:"🇪🇬 مصر", url:"https://iptv-org.github.io/iptv/countries/eg.m3u"},
+  {label:"🇸🇦 السعودية", url:"https://iptv-org.github.io/iptv/countries/sa.m3u"},
+  {label:"🇦🇪 الإمارات", url:"https://iptv-org.github.io/iptv/countries/ae.m3u"},
+  {label:"🇯🇴 الأردن", url:"https://iptv-org.github.io/iptv/countries/jo.m3u"},
+  {label:"🇲🇦 المغرب", url:"https://iptv-org.github.io/iptv/countries/ma.m3u"},
+  {label:"📰 إخبارية عالمية", url:"https://iptv-org.github.io/iptv/categories/news.m3u"},
+  {label:"⚽ رياضة", url:"https://iptv-org.github.io/iptv/categories/sport.m3u"},
+  {label:"🎬 أفلام", url:"https://iptv-org.github.io/iptv/categories/movies.m3u"},
+  {label:"📚 كل الفئات", url:"https://iptv-org.github.io/iptv/index.category.m3u"},
+];
+function renderQuickLinks(){
+  const wrap = document.getElementById('quickLinks');
+  QUICK_LINKS.forEach(q=>{
+    const a = document.createElement('a');
+    a.href = q.url; a.target = '_blank'; a.rel='noopener';
+    a.className='ctrlBtn'; a.style.cssText='display:inline-block;background:var(--card2);color:var(--text);border:1px solid var(--border);text-decoration:none;border-radius:10px;padding:8px 12px;font-size:12.5px';
+    a.textContent = q.label;
+    wrap.appendChild(a);
+  });
+}
+renderQuickLinks();
+renderTabs();
+renderGrid();
+</script>
+</body>
+</html>
